@@ -26,8 +26,8 @@ price3=$(echo "$content3" | grep -oP 'data-id="133757270" data-type="Cryptoquote
 price4=$(echo "$content4" | grep -oP 'data-id="128433627" data-type="Cryptoquotes" data-field="last" data-round="4"  >\s*\K[^<]+' | head -n 1)
 
 # Sauvegarder les données
-line="$time0"+",$price1"+",$price2"+",$price3"+",$price4"
-echo line >> bitcoin_mult.csv
+line="$time0;$price1;$price2;$price3;$price4"
+echo "$line" >> bitcoin_data_mult.csv
 
 # Afficher le résultat
 echo "Scraped at $time: ; Bitcoin: $price1 USD ; Etherum: $price2 USD ; Binance coin: $price3 USD ; Solana: $price4 USD"
