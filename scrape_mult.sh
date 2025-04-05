@@ -17,7 +17,7 @@ time0=$(date '+%Y-%m-%d %H:%M:%S')
 
 # Créer un fichier CSV s il n existe pas
 if [ ! -f bitcoin_data_mult.csv ]; then
-    echo "timestamp,price" > bitcoin_data.csv
+    echo "timestamp;bitcoin;ethereum;binance_coin;solana" > bitcoin_data_mult.csv
 fi
 
 price1=$(echo "$content1" | grep -oP 'data-id="45553945" data-type="Cryptoquotes" data-field="last" data-round="2"  >\s*\K[^<]+' | head -n 1)
