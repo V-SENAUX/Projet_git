@@ -35,7 +35,9 @@ def load_data():
     # Nettoyage des données
     for col in df.columns[1:]:
         df[col] = df[col].astype(str).str.replace('\u202f', '').str.replace(',', '.').astype(float)
-    
+    # Remplir les valeurs manquantes avec la dernière valeur disponible
+    df = df.fillna(method='ffill')
+
     return df
 
 # === Application Dash ===
@@ -93,7 +95,7 @@ def update_table(selected_cryptos, n):
         html.Thead(html.Tr([html.Th(col) for col in table_df.columns])),
         html.Tbody([
             html.Tr([html.Td(table_df.iloc[i][col]) for col in table_df.columns])
-            for i in range(min(len(table_df), 20))
+            for i in range(len(table_df))
         ])
     ])
 
