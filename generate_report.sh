@@ -1,4 +1,4 @@
 #!/bin/bash
 cd /home/ubuntu/Projet_git
 source ../myenv/bin/activate
-python app.py
+python generate_report.py >> report.log 2>&1
