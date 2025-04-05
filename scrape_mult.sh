@@ -30,6 +30,6 @@ line="$time0;$price1;$price2;$price3;$price4"
 echo "$line" >> bitcoin_data_mult.csv
 
 # Afficher le résultat
-echo "Scraped at $time: ; Bitcoin: $price1 USD ; Etherum: $price2 USD ; Binance coin: $price3 USD ; Solana: $price4 USD"
+echo "Scraped at $time0: ; Bitcoin: $price1 USD ; Etherum: $price2 USD ; Binance coin: $price3 USD ; Solana: $price4 USD"
 
 
