@@ -1,6 +1,4 @@
 import sys
-print(sys.executable)
-
 import dash
 from dash import dcc, html
 import pandas as pd
@@ -19,6 +17,8 @@ def max_drawdown(series):
 
 # RSI (Relative Strength Index)
 def compute_rsi(series, period=14):
+    if len(series) < period:  # Vérifie si le nombre de données est suffisant pour calculer le RSI
+        return pd.Series([np.nan] * len(series))  # Retourne NaN si pas assez de données
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
@@ -29,9 +29,13 @@ def compute_rsi(series, period=14):
 # Charger et préparer les données depuis le CSV
 def load_data():
     df = pd.read_csv('/home/ubuntu/Projet_git/bitcoin_data_mult.csv', sep=';', header=0, names=['timestamp', 'bitcoin', 'ethereum', 'binance_coin', 'solana'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], format='%Y-%m-%d %H:%M:%S')
+    # Convertir l'heure en heure locale (UTC+2, heure de Paris)
+    df['timestamp'] = pd.to_datetime(df['timestamp'], format='%Y-%m-%d %H:%M:%S') + pd.Timedelta(hours=2)
+    
+    # Nettoyage des données
     for col in df.columns[1:]:
         df[col] = df[col].astype(str).str.replace('\u202f', '').str.replace(',', '.').astype(float)
+    
     return df
 
 # === Application Dash ===
@@ -48,6 +52,13 @@ app.layout = html.Div([
 
     dcc.Graph(id='price-graph'),
 
+    # Déplacer la section "Choisir les cryptos" à la fin
+    html.Div(id='indicators'),
+    html.Div(id='correlation-graph'),
+    html.Div(id='moving-avg-graph'),
+    html.Div(id='rsi-tabs'),
+
+    # "Choisir les cryptos" déplacé ici
     html.H2("Choisir les cryptos à afficher dans le tableau"),
     dcc.Checklist(
         id='crypto-selector',
@@ -56,15 +67,7 @@ app.layout = html.Div([
         inline=True
     ),
 
-    html.Div(id='data-table'),
-
-    html.Div(id='indicators'),
-
-    html.Div(id='correlation-graph'),
-
-    html.Div(id='moving-avg-graph'),
-
-    html.Div(id='rsi-tabs')
+    html.Div(id='data-table')  # Tableau à la fin
 ])
 
 # === Callbacks ===
