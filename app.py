@@ -6,6 +6,9 @@ import plotly.express as px
 import plotly.graph_objs as go
 import numpy as np
 from dash.dependencies import Input, Output
+import os
+import datetime
+import json
 
 # === Fonctions utiles ===
 
@@ -40,26 +43,48 @@ def load_data():
 
     return df
 
-# Calculer les indicateurs du rapport quotidien
-def daily_report(df):
-    # Sélectionner uniquement les données du jour (en se basant sur la date)
-    today = df[df['timestamp'].dt.date == pd.to_datetime("today").date()]
-    
-    if len(today) == 0:
-        return {}
-    
-    open_price = today.iloc[0]  # Premier prix de la journée
-    close_price = today.iloc[-1]  # Dernier prix de la journée
-    
-    daily_volatility = today.iloc[:, 1:].pct_change().std().mean() * 100  # Volatilité quotidienne moyenne
-    evolution = (close_price[1:] - open_price[1:]) / open_price[1:] * 100  # Evolution en % de la journée
+def generate_report_for_day(df, day, is_today=True):
+    # Déterminer la date de début et de fin de la journée
+    day_start = datetime.datetime(day.year, day.month, day.day)
+    day_end = day_start + datetime.timedelta(days=1)
 
-    return {
-        "open_price": open_price[1:].to_dict(),
-        "close_price": close_price[1:].to_dict(),
-        "daily_volatility": daily_volatility,
-        "evolution": evolution.to_dict(),
-    }
+    # Filtrer les données pour cette journée
+    df_day = df[(df['timestamp'] >= day_start) & (df['timestamp'] < day_end)]
+
+    # Initialiser les variables
+    open_prices = df_day.iloc[0, 1:]
+    current_prices = df_day.iloc[-1, 1:] if not df_day.empty else None
+    volatility = df_day[df_day.columns[1:]].pct_change().std() * 100 if not df_day.empty else None
+    report = f"Rapport du {day.strftime('%Y-%m-%d')}\n\n"
+
+    for crypto in df_day.columns[1:]:
+        report += f"{crypto}:\n"
+        
+        # Pour aujourd'hui, on affiche le prix actuel et l'évolution actuelle
+        if is_today:
+            if current_prices is not None:
+                returns = ((current_prices - open_prices) / open_prices * 100)
+                report += f"  - Prix d'ouverture: {open_prices[crypto]:.2f} USD\n"
+                report += f"  - Prix actuel: {current_prices[crypto]:.2f} USD\n"
+                report += f"  - Évolution actuelle: {returns[crypto]:.2f} %\n"
+            else:
+                report += f"  - Prix actuel: Pas encore disponible\n"
+                report += f"  - Évolution actuelle: Pas encore disponible\n"
+        # Pour hier, on affiche le prix de clôture et l'évolution
+        else:
+            close_price = df_day.iloc[-1][crypto] if not df_day.empty else None
+            if close_price is not None:
+                returns = ((close_price - open_prices[crypto]) / open_prices[crypto] * 100)
+                report += f"  - Prix d'ouverture: {open_prices[crypto]:.2f} USD\n"
+                report += f"  - Prix de clôture: {close_price:.2f} USD\n"
+                report += f"  - Évolution: {returns:.2f} %\n"
+            else:
+                report += f"  - Prix de clôture: Pas encore disponible\n"
+                report += f"  - Évolution: Pas encore disponible\n"
+        
+        report += f"  - Volatilité: {volatility[crypto]:.2f} %\n\n"
+
+    return report
 
 
 # === Application Dash ===
@@ -81,7 +106,7 @@ app.layout = html.Div([
     html.Div(id='correlation-graph'),
     html.Div(id='moving-avg-graph'),
     html.Div(id='rsi-tabs'),
-    html.Div(id='daily-report'),
+    html.Div(id='daily-report-section'),
 ])
 
 # === Callbacks ===
@@ -207,36 +232,28 @@ def update_rsi_graph(n):
 
 
 @app.callback(
-    Output('daily-report', 'children'),
+    Output('daily-report-section', 'children'),
     Input('interval-component', 'n_intervals')
 )
-def update_daily_report(n):
-    df = load_data()
-    report = daily_report(df)
+def display_daily_report(n):
+    now = datetime.datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+    yesterday = now - datetime.timedelta(days=1)
+    yesterday_str = yesterday.strftime("%Y-%m-%d")
     
-    # Mettre à jour seulement à 20h
-    current_hour = pd.to_datetime("now").hour
-    if current_hour == 20:
-        return html.Div([
-            html.H2("Daily Report (Mis à jour à 20h)"),
-            html.Ul([
-                html.Li(f"Volatilité quotidienne: {report['daily_volatility']:.2f}%")
-            ]),
-            html.H3("Prix d'ouverture:"),
-            html.Ul([
-                html.Li(f"{crypto}: {price:.2f}") for crypto, price in report["open_price"].items()
-            ]),
-            html.H3("Prix de clôture:"),
-            html.Ul([
-                html.Li(f"{crypto}: {price:.2f}") for crypto, price in report["close_price"].items()
-            ]),
-            html.H3("Évolution de la journée:"),
-            html.Ul([
-                html.Li(f"{crypto}: {evol:.2f}%") for crypto, evol in report["evolution"].items()
-            ]),
-        ])
-    else:
-        return html.Div([html.H2("Le rapport quotidien sera mis à jour à 20h.")])
+    # Charger les données et générer les rapports
+    df = load_data()  # Assure-toi que cette fonction charge correctement tes données
+    today_report_content = generate_report_for_day(df, now, is_today=True)  # Rapport d'aujourd'hui
+    yesterday_report_content = generate_report_for_day(df, yesterday, is_today=False)  # Rapport d'hier
+
+    # Affichage des rapports sur la page
+    return html.Div([
+        html.H2(f"Rapport quotidien du {yesterday_str} (hier)"),
+        html.Pre(yesterday_report_content),
+        html.Hr(),  # Ligne de séparation entre les rapports
+        html.H2(f"Rapport du {today_str} (aujourd'hui)"),
+        html.Pre(today_report_content)
+    ])
 
 
 
