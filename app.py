@@ -74,7 +74,7 @@ app.layout = html.Div([
         n_intervals=0
     ),
 
-    dcc.Graph(id='price-graph'),
+    html.Div(id='price-graph'),
 
     # Déplacer la section "Choisir les cryptos" à la fin
     html.Div(id='indicators'),
@@ -82,45 +82,37 @@ app.layout = html.Div([
     html.Div(id='moving-avg-graph'),
     html.Div(id='rsi-tabs'),
     html.Div(id='daily-report'),
-
-    # "Choisir les cryptos" déplacé ici
-    html.H2("Choisir les cryptos à afficher dans le tableau"),
-    dcc.Checklist(
-        id='crypto-selector',
-        options=[{'label': col, 'value': col} for col in ['bitcoin', 'ethereum', 'binance_coin', 'solana']],
-        value=['bitcoin', 'ethereum', 'binance_coin', 'solana'],
-        inline=True
-    ),
-
-    html.Div(id='data-table')  # Tableau à la fin
 ])
 
 # === Callbacks ===
 
 @app.callback(
-    Output('price-graph', 'figure'),
+    Output('price-graph', 'children'),
     Input('interval-component', 'n_intervals')
 )
 def update_price_graph(n):
     df = load_data()
-    return px.line(df, x='timestamp', y=df.columns[1:], title='Crypto Prices Over Time')
 
+    graphs = []
+    for crypto in df.columns[1:]:
+        last_value = df[crypto].dropna().iloc[-1]
+        graphs.append(
+            html.Div([
+                html.H3(f"Prix de {crypto} - Dernier : {last_value:,.2f} USD"),
+                dcc.Graph(
+                    figure=go.Figure(
+                        data=[go.Scatter(x=df['timestamp'], y=df[crypto], mode='lines', name=crypto)],
+                        layout=go.Layout(
+                            title=f"Prix de {crypto}",
+                            xaxis=dict(title='Timestamp'),
+                            yaxis=dict(title='Price (USD)')
+                        )
+                    )
+                )
+            ])
+        )
 
-@app.callback(
-    Output('data-table', 'children'),
-    [Input('crypto-selector', 'value'),
-     Input('interval-component', 'n_intervals')]
-)
-def update_table(selected_cryptos, n):
-    df = load_data()
-    table_df = df[['timestamp'] + selected_cryptos]
-    return html.Table([
-        html.Thead(html.Tr([html.Th(col) for col in table_df.columns])),
-        html.Tbody([
-            html.Tr([html.Td(table_df.iloc[i][col]) for col in table_df.columns])
-            for i in range(len(table_df))
-        ])
-    ])
+    return graphs
 
 
 @app.callback(
@@ -167,13 +159,21 @@ def update_correlation(n):
 )
 def update_moving_avg(n):
     df = load_data()
-    moving_avg = df[df.columns[1:]].rolling(window=7).mean()
-    moving_avg['timestamp'] = df['timestamp']
+    # Calculer la moyenne mobile par crypto
+    moving_avg_data = {crypto: df[crypto].rolling(window=7).mean() for crypto in df.columns[1:]}  # Moyenne mobile par crypto
+    
     return html.Div([
-        html.H2("Moyenne Mobile (7 points)"),
-        dcc.Graph(
-            figure=px.line(moving_avg, x='timestamp', y=df.columns[1:], title="Moving Averages")
-        )
+        html.H2("Moyenne Mobile (7 points) par crypto"),
+        dcc.Tabs([
+            dcc.Tab(label=crypto, children=[
+                dcc.Graph(
+                    figure=go.Figure(
+                        data=[go.Scatter(x=df['timestamp'], y=moving_avg_data[crypto], mode='lines', name=f"Moving Average - {crypto}")],
+                        layout=go.Layout(title=f"Moving Average (7) - {crypto}")
+                    )
+                )
+            ]) for crypto in df.columns[1:]
+        ])
     ])
 
 
@@ -183,20 +183,28 @@ def update_moving_avg(n):
 )
 def update_rsi_graph(n):
     df = load_data()
+
     rsi_data = {crypto: compute_rsi(df[crypto]) for crypto in df.columns[1:]}
+
+    fig = go.Figure()
+
+    for crypto in df.columns[1:]:
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'], y=rsi_data[crypto],
+            mode='lines', name=f'RSI - {crypto}'
+        ))
+
+    fig.update_layout(
+        title="RSI pour toutes les cryptos",
+        xaxis=dict(title='Timestamp'),
+        yaxis=dict(title='RSI', range=[0, 100]),
+        showlegend=True
+    )
+
     return html.Div([
-        html.H2("RSI par crypto"),
-        dcc.Tabs([
-            dcc.Tab(label=crypto, children=[
-                dcc.Graph(
-                    figure=go.Figure(
-                        data=[go.Scatter(x=df['timestamp'], y=rsi_data[crypto], mode='lines', name='RSI')],
-                        layout=go.Layout(title=f"RSI - {crypto}", yaxis=dict(range=[0, 100]))
-                    )
-                )
-            ]) for crypto in df.columns[1:]
-        ])
+        dcc.Graph(figure=fig)
     ])
+
 
 @app.callback(
     Output('daily-report', 'children'),
